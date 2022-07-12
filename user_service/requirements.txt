@@ -1,0 +1,5 @@
+requests
+aws-lambda-powertools
+jsonschema
+bcrypt
+pyjwt

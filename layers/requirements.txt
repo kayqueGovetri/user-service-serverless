@@ -1,0 +1,5 @@
+requests
+aws-lambda-powertools==1.26.3
+jsonschema
+bcrypt
+pyjwt

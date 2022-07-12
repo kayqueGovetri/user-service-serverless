@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: "User service"
+
+Globals:
+  Function:
+    Timeout: 5
+
+Resources:
+  LoginServiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: user_service/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Layers:
+        - !Ref Layers
+      Architectures:
+        - x86_64
+      Events:
+        ServiceUserSignup:
+            Type: Api
+            Properties:
+                Path: /service/user/signup
+                Method: POST
+        ServiceUserLogin:
+            Type: Api
+            Properties:
+              Path: /service/user/login
+              Method: GET
+    Enviroment:
+        Variables:
+          LOG_LEVEL: INFO
+          POWERTOOLS_LOGGER_SAMPLE_RATE: 0.1
+          POWERTOOLS_LOGGER_LOG_EVENT: true
+          POWERTOOLS_METRICS_NAMESPACE: UserService
+          POWERTOOLS_SERVICE_NAME: UserService
+          REGION: !Ref AWS::Region
+          TABLE_NAME_DYNAMODB: !Ref LoginServiceTable
+          TABLE_NAME_REGION: "us-east-1"
+          SECRET_USER_SERVICE: '{{resolve:ssm:/SecretUserService}}'
+          ENVIRONMENT: "lambda"
+          AWS_SECRET: '{{resolve:ssm:/AwsSecretUserService}}'
+          AWS_KEY: '{{resolve:ssm:/AwsKeyUserService}'
+    Policies:
+      - DynamoDBCrudPolicy:
+          TableName: !Ref LoginServiceTable
+
+  LoginServiceTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: "LoginServiceTable"
+      AttributeDefinitions:
+        - AttributeName: email
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: email
+          KeyType: HASH
+
+  Layers:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: layers/
+      CompatibleRuntimes:
+        - python3.8
+    Metadata:
+      BuildMethod: python3.8

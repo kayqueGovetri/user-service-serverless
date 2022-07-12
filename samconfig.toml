@@ -1,0 +1,12 @@
+version = 0.1
+[kayque]
+[kayque.deploy]
+[kayque.deploy.parameters]
+stack_name = "user-service"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-19opmql39z9l"
+s3_prefix = "user-service"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+image_repositories = []
+profile = "kayque"
