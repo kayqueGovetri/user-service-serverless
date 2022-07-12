@@ -1,5 +1,6 @@
 _install_dev:
-	pip install -r requirements_dev
+	pip install -r requirements_dev.txt
+	pre-commit install
 
 _install_prod:
 	pip install -r requirements.txt
