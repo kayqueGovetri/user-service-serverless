@@ -71,7 +71,6 @@ jobs:
           path: packaged-testing.yaml
 
   deploy-staging:
-    if: github.ref == 'refs/heads/dev'
     needs: [build-and-package]
     runs-on: ubuntu-latest
     steps:
