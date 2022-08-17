@@ -37,6 +37,7 @@ jobs:
 
 
 
+
   build-and-package:
     needs: [lint-test]
     runs-on: ubuntu-latest
@@ -101,5 +102,4 @@ jobs:
             --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
             --no-fail-on-empty-changeset \
             --role-arn ${TESTING_CLOUDFORMATION_EXECUTION_ROLE} \
-            --no-confirm-changeset \
-            --parameter-overrides Env=dev
+            --no-confirm-changeset

@@ -57,6 +57,7 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
+
   Layers:
     Type: AWS::Serverless::LayerVersion
     Properties:
