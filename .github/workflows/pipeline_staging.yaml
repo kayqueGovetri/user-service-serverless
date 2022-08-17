@@ -8,12 +8,12 @@ on:
 env:
   PIPELINE_USER_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   PIPELINE_USER_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  SAM_TEMPLATE: template.yaml
-  TESTING_STACK_NAME: user-service
-  TESTING_PIPELINE_EXECUTION_ROLE: arn:aws:iam::791315894763:role/aws-sam-cli-managed-staging-PipelineExecutionRole-1AKIYFWEEMXYJ
-  TESTING_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::791315894763:role/aws-sam-cli-managed-stagi-CloudFormationExecutionR-1E39A64HAQQ2L
-  TESTING_ARTIFACTS_BUCKET: aws-sam-cli-managed-staging-pipel-artifactsbucket-jn6y6upplkhu
-  TESTING_REGION: us-east-1
+  SAM_TEMPLATE:  ${{ secrets.SAM_TEMPLATE }}
+  TESTING_STACK_NAME: ${{ secrets.TESTING_STACK_NAME }}
+  TESTING_PIPELINE_EXECUTION_ROLE: ${{ secrets.TESTING_PIPELINE_EXECUTION_ROLE }}
+  TESTING_CLOUDFORMATION_EXECUTION_ROLE: ${{ secrets.TESTING_CLOUDFORMATION_EXECUTION_ROLE }}
+  TESTING_ARTIFACTS_BUCKET: ${{ secrets.TESTING_ARTIFACTS_BUCKET }}
+  TESTING_REGION: ${{ secrets.TESTING_REGION }}
 
 jobs:
   lint-test:
