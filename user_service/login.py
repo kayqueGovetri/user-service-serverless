@@ -1,5 +1,3 @@
-import json
-import os
 from dataclasses import dataclass
 from typing import Any, Dict
 
@@ -9,60 +7,37 @@ from boto3.dynamodb.conditions import Key
 from jsonschema import ValidationError, validate
 
 try:
-    from abstract_class import AbstractClass
     from auth import Auth
     from date import Date
     from dynamodb import Dynamodb
     from encode import Encode
+    from utils import exception_handler, response_handler
 except ImportError:
-    from abstract_class import AbstractClass
+    from layers import Auth, Date, Dynamodb, Encode
+    from layers.utils import exception_handler, response_handler
 
-    from layers import Auth, Date, Encode
-    from layers.dynamodb import Dynamodb
-
-logger = Logger(service="LoginServiceSignup")
-
-
-def exception_handler(status_code, error):
-    body = {
-        "status_code": status_code,
-        "headers": {"Content-Type": "application/json"},
-        "message": str(error),
-    }
-    return Response(
-        status_code=status_code, content_type="application/json", body=json.dumps(body)
-    )
-
-
-def response_handler(body: dict, status_code=200):
-    return Response(
-        status_code=status_code, content_type="application/json", body=json.dumps(body)
-    )
+logger = Logger(service="UserServiceLogin")
 
 
 @dataclass
-class Login(AbstractClass):
+class Login:
     body: dict
-    _username: str = ""
-    _secret: str = os.getenv("SECRET_USER_SERVICE")
+    dynamodb: Dynamodb
+    _email: str = ""
     _date: Date = Date()
     _encode: Encode = Encode()
     _auth: Auth = Auth()
-    _dynamodb: Dynamodb = Dynamodb(
-        table_name=os.getenv("TABLE_NAME_DYNAMODB"),
-        environment=os.getenv("ENVIRONMENT"),
-        region=os.getenv("TABLE_NAME_REGION"),
-        aws_secret=os.getenv("AWS_SECRET"),
-        aws_key=os.getenv("AWS_KEY"),
-    )
 
     def __post_init__(self):
-        self._username = self.body.get("username")
+        self._email = self.body.get("email")
         self._password = self.body.get("password")
+        logger.info(f"Body in login: {self.body}")
 
-    def get_user_to_username(self) -> Dict[Any, Any]:
-        key_condition_expression = Key("username").eq(self._username.lower())
-        response = self._dynamodb.query(KeyConditionExpression=key_condition_expression)
+    def get_user_to_email(self) -> Dict[Any, Any]:
+        key_condition_expression = Key("email").eq(self._email.lower())
+        response = self.dynamodb.query(
+            KeyConditionExpression=key_condition_expression, IndexName="gsiEmail"
+        )
         if response.get("Items"):
             return response.get("Items")[0]
         return {}
@@ -70,7 +45,7 @@ class Login(AbstractClass):
     def execute(self) -> Response:
         try:
             self._validate()
-            user = self.get_user_to_username()
+            user = self.get_user_to_email()
             if not user:
                 return exception_handler(
                     status_code=400, error="As credenciais estão incorretas."
@@ -87,6 +62,8 @@ class Login(AbstractClass):
             )
         except ValidationError as error:
             return exception_handler(status_code=400, error=error.message)
+        except Exception as error:
+            return exception_handler(status_code=400, error=str(error))
 
     def _validate(self) -> None:
         validate(self.body, self._get_schema())
@@ -95,11 +72,11 @@ class Login(AbstractClass):
         return {
             "type": "object",
             "properties": {
-                "username": {"type": "string"},
+                "email": {"type": "string"},
                 "password": {"type": "string"},
             },
             "required": [
-                "username",
+                "email",
                 "password",
             ],
         }

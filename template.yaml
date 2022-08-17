@@ -2,12 +2,71 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: "User service"
 
+
 Globals:
   Function:
-    Timeout: 5
+    Timeout: 3
 
 Resources:
-  LoginServiceFunction:
+  LoginServiceTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: "LoginServiceTable"
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+        - AttributeName: username
+          AttributeType: S
+        - AttributeName: deleted
+          AttributeType: S
+
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: gsiEmail
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: gsiUsername
+          KeySchema:
+            - AttributeName: username
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: gsiDeletedUsers
+          KeySchema:
+            - AttributeName: sk
+              KeyType: HASH
+            - AttributeName: deleted
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: gsiUsers
+          KeySchema:
+            - AttributeName: sk
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+  Layers:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: layers/
+      CompatibleRuntimes:
+        - python3.8
+    Metadata:
+      BuildMethod: python3.8
+
+  ServiceUser:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: user_service/
@@ -18,17 +77,47 @@ Resources:
       Architectures:
         - x86_64
       Events:
-        ServiceUserSignup:
-            Type: Api
-            Properties:
-                Path: /service/user/signup
-                Method: POST
         ServiceUserLogin:
-            Type: Api
-            Properties:
-              Path: /service/user/login
-              Method: GET
-    Enviroment:
+          Type: Api
+          Properties:
+            Path: /service/user/login
+            Method: POST
+        ServiceUserSignup:
+          Type: Api
+          Properties:
+            Path: /service/user/signup
+            Method: POST
+        ServiceUserUpdate:
+          Type: Api
+          Properties:
+            Path: /service/user
+            Method: PUT
+        ServiceUserDelete:
+          Type: Api
+          Properties:
+            Path: /service/user
+            Method: DELETE
+        ServiceUserGet:
+          Type: Api
+          Properties:
+            Path: /service/user/{user_id}
+            Method: GET
+        ServiceUsersGet:
+          Type: Api
+          Properties:
+            Path: /service/users
+            Method: GET
+            RequestParameters:
+              - method.request.querystring.limit:
+                  Required: false
+                  Caching: false
+              - method.request.querystring.last_evaluated_key:
+                  Required: false
+                  Caching: false
+              - method.request.querystring.page:
+                  Required: true
+                  Caching: false
+      Environment:
         Variables:
           LOG_LEVEL: INFO
           POWERTOOLS_LOGGER_SAMPLE_RATE: 0.1
@@ -36,33 +125,41 @@ Resources:
           POWERTOOLS_METRICS_NAMESPACE: UserService
           POWERTOOLS_SERVICE_NAME: UserService
           REGION: !Ref AWS::Region
-          TABLE_NAME_DYNAMODB: !Ref LoginServiceTable
+          TABLE_NAME_DYNAMODB: "LoginServiceTable"
           TABLE_NAME_REGION: "us-east-1"
           SECRET_USER_SERVICE: '{{resolve:ssm:/SecretUserService}}'
           ENVIRONMENT: "lambda"
-          AWS_SECRET: '{{resolve:ssm:/AwsSecretUserService}}'
-          AWS_KEY: '{{resolve:ssm:/AwsKeyUserService}'
-    Policies:
-      - DynamoDBCrudPolicy:
-          TableName: !Ref LoginServiceTable
+          AWS_SECRET: '{{resolve:ssm:/AccessSecretUserService}}'
+          AWS_KEY: '{{resolve:ssm:/KeyUserService}}'
 
-  LoginServiceTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: "LoginServiceTable"
-      AttributeDefinitions:
-        - AttributeName: email
-          AttributeType: S
-      BillingMode: PAY_PER_REQUEST
-      KeySchema:
-        - AttributeName: email
-          KeyType: HASH
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: "LoginServiceTable"
 
-  Layers:
-    Type: AWS::Serverless::LayerVersion
+  AuthorizerLambda:
+    Type: AWS::Serverless::Function
     Properties:
-      ContentUri: layers/
-      CompatibleRuntimes:
-        - python3.8
-    Metadata:
-      BuildMethod: python3.8
+      CodeUri: authorizer/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Layers:
+        - !Ref Layers
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          POWERTOOLS_LOGGER_SAMPLE_RATE: 0.1
+          POWERTOOLS_LOGGER_LOG_EVENT: true
+          POWERTOOLS_METRICS_NAMESPACE: UserService
+          POWERTOOLS_SERVICE_NAME: UserService
+          REGION: !Ref AWS::Region
+          TABLE_NAME_DYNAMODB: "LoginServiceTable"
+          TABLE_NAME_REGION: "us-east-1"
+          SECRET_USER_SERVICE: '{{resolve:ssm:/SecretUserService}}'
+          ENVIRONMENT: "lambda"
+          AWS_SECRET: '{{resolve:ssm:/AccessSecretUserService}}'
+          AWS_KEY: '{{resolve:ssm:/KeyUserService}}'
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: "LoginServiceTable"

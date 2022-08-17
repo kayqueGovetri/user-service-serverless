@@ -1,13 +1,24 @@
-import boto3
-
 from typing import Dict
+
+from boto3 import client, resource
 from boto3.dynamodb.conditions import Attr, Or
 
 
-class Dynamodb:
+class Singleton(type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        table_name = kwargs.get("table_name")
+        if table_name not in cls._instances:
+            cls._instances[table_name] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[table_name]
+
+
+class Dynamodb(metaclass=Singleton):
     def __init__(
-            self, environment: str, region: str, table_name: str, aws_key="", aws_secret=""
+        self, environment: str, region: str, table_name: str, aws_key="", aws_secret=""
     ):
+        self.resource = None
         self.environment = environment
         self.region = region
         self.table_name = table_name
@@ -19,10 +30,12 @@ class Dynamodb:
 
     def __get_client(self):
         if self.aws_secret and self.aws_key:
-            return boto3.client('dynamodb',
-                                region_name=self.region,
+            return client(
+                "dynamodb",
+                region_name=self.region,
                 aws_access_key_id=self.aws_key,
-                aws_secret_access_key=self.aws_secret,)
+                aws_secret_access_key=self.aws_secret,
+            )
 
     def scan(self, filter_expression):
         response = self.table.scan(FilterExpression=filter_expression)
@@ -37,19 +50,10 @@ class Dynamodb:
         return data
 
     def update(
-            self,
-            key: Dict,
-            update_expression: str,
-            expression_attribute_names: Dict,
-            expression_attribute_values: Dict,
+        self,
+        item: Dict,
     ):
-        response = self.table.update_item(
-            Key=key,
-            UpdateExpression=update_expression,
-            ExpressionAttributeNames=expression_attribute_names,
-            ExpressionAttributeValues=expression_attribute_values,
-            ReturnValues="ALL_NEW",
-        )
+        response = self.table.put_item(Item=item)
         return response
 
     def create(self, item):
@@ -65,19 +69,17 @@ class Dynamodb:
 
     def get_table(self):
         if self.environment == "AWS_SAM_LOCAL":
-            dynamodb_table = boto3.resource(
-                "dynamodb", endpoint_url="http://localhost:8000"
-            )
+            dynamodb_table = resource("dynamodb", endpoint_url="http://localhost:8000")
         elif self.aws_key and self.aws_secret:
-            dynamodb_table = boto3.resource(
+            dynamodb_table = resource(
                 "dynamodb",
                 region_name=self.region,
                 aws_access_key_id=self.aws_key,
                 aws_secret_access_key=self.aws_secret,
             )
         else:
-            dynamodb_table = boto3.resource("dynamodb", region_name=self.region)
-
+            dynamodb_table = resource("dynamodb", region_name=self.region)
+        self.resource = dynamodb_table
         self.table = dynamodb_table.Table(self.table_name)
 
     def query(self, **kwargs):
@@ -113,11 +115,23 @@ class Dynamodb:
             raise ValueError("O tipo do tamanho do lote tem que ser inteiro.")
 
         if batch_size < 1 or batch_size > 100:
-            raise ValueError("Erro no tamanho do lote. Tem que ser um valor entre 0 e 100.")
+            raise ValueError(
+                "Erro no tamanho do lote. Tem que ser um valor entre 0 e 100."
+            )
 
-        batches = [items[i: i + batch_size] for i in range(0, len(items), batch_size)]
+        batches = [items[i : i + batch_size] for i in range(0, len(items), batch_size)]
         batches_is_in = Attr(field_name).is_in(batches[0])
         for b in batches[1:]:
             batches_is_in = batches_is_in | Attr(field_name).is_in(b)
 
         return batches_is_in
+
+    def count(self, **kwargs):
+        response = self.table.query(**kwargs)
+        data = response.get("Items")
+        while "LastEvaluatedKey" in response:
+            response = self.table.query(
+                **kwargs, ExclusiveStartKey=response.get("LastEvaluatedKey")
+            )
+            data.extend(response["Items"])
+        return len(data)
